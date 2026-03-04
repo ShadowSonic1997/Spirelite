@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Spirelite</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">♠</div>
+      <div>
+        <div class="title">Spirelite</div>
+        <div class="subtitle">Deck roguelite (GitHub Pages-ready)</div>
+      </div>
+    </div>
+
+    <div class="hud">
+      <div class="pill" id="hudFloor">Floor: 1</div>
+      <div class="pill" id="hudGold">Gold: 0</div>
+      <div class="pill" id="hudRelics">Relics: 0</div>
+      <button class="btn ghost" id="btnNewRun" title="Start a new run">New Run</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel left">
+      <h2>Player</h2>
+      <div class="stats">
+        <div class="stat">
+          <div class="label">HP</div>
+          <div class="value" id="pHp"></div>
+          <div class="bar"><div class="fill" id="pHpBar"></div></div>
+        </div>
+        <div class="stat">
+          <div class="label">Block</div>
+          <div class="value" id="pBlock"></div>
+        </div>
+        <div class="stat">
+          <div class="label">Energy</div>
+          <div class="value" id="pEnergy"></div>
+        </div>
+        <div class="stat">
+          <div class="label">Status</div>
+          <div class="value small" id="pStatus"></div>
+        </div>
+      </div>
+
+      <h2>Deck</h2>
+      <div class="deckRow">
+        <div class="pill">Draw: <span id="drawCount">0</span></div>
+        <div class="pill">Discard: <span id="discardCount">0</span></div>
+        <div class="pill">Exhaust: <span id="exhaustCount">0</span></div>
+      </div>
+
+      <div class="row">
+        <button class="btn" id="btnViewDeck">View Deck</button>
+        <button class="btn ghost" id="btnSave">Save</button>
+        <button class="btn ghost" id="btnLoad">Load</button>
+      </div>
+
+      <div class="note" id="leftNote"></div>
+    </section>
+
+    <section class="panel center">
+      <div class="screen" id="screen">
+        <!-- filled by JS -->
+      </div>
+    </section>
+
+    <section class="panel right">
+      <h2>Combat Log</h2>
+      <div class="log" id="log"></div>
+    </section>
+  </main>
+
+  <!-- modal -->
+  <div class="modalWrap hidden" id="modalWrap">
+    <div class="modal">
+      <div class="modalHead">
+        <div class="modalTitle" id="modalTitle">Modal</div>
+        <button class="btn ghost" id="btnModalClose">Close</button>
+      </div>
+      <div class="modalBody" id="modalBody"></div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
