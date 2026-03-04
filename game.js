@@ -1,7 +1,9 @@
 /* Spirelite — vanilla JS roguelite (GitHub Pages-ready)
-   - Rooms: battle / elite / shop / rest / event / treasure
-   - StS-ish combat: deck/hand/discard, 3 energy, block, weak/vuln
-   - Rewards: choose 1 of 3 upgrades after battle
+   Visual update:
+   - Procedural SVG "sprites" (no asset files needed)
+   - Real card UI markup (art panel + frames + rarity glow)
+   - Click an enemy to select target (highlighted)
+   - Intent icons
 */
 
 (() => {
@@ -18,16 +20,114 @@
     return arr;
   };
 
+  // ----- Procedural SVG helpers (no asset files needed) -----
+  function svgDataUri(svg) {
+    return "data:image/svg+xml;utf8," + encodeURIComponent(svg.trim());
+  }
+
+  function cardArtUri(cardId, type) {
+    const palette = {
+      Attack: ["#ff5c7a", "#ffcc66"],
+      Skill: ["#5cc8ff", "#6b5cff"],
+      Power: ["#39d98a", "#b1ff6a"],
+    }[type] || ["#aeb6e6", "#6b5cff"];
+
+    const seed = [...cardId].reduce((a, c) => a + c.charCodeAt(0), 0);
+    const a = (seed * 37) % 360;
+    const b = (seed * 91) % 360;
+
+    const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="400" height="140">
+      <defs>
+        <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="${palette[0]}"/>
+          <stop offset="1" stop-color="${palette[1]}"/>
+        </linearGradient>
+        <radialGradient id="r" cx="30%" cy="30%" r="70%">
+          <stop offset="0" stop-color="white" stop-opacity="0.35"/>
+          <stop offset="1" stop-color="black" stop-opacity="0"/>
+        </radialGradient>
+        <filter id="blur" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="10"/>
+        </filter>
+      </defs>
+
+      <rect width="100%" height="100%" fill="#0b0f1a"/>
+      <rect width="100%" height="100%" fill="url(#g)" opacity="0.55"/>
+      <circle cx="90" cy="50" r="60" fill="url(#r)"/>
+
+      <g opacity="0.18" filter="url(#blur)">
+        <path d="M-10 120 C 60 40, 120 180, 210 70 S 380 150, 420 40"
+              fill="none" stroke="white" stroke-width="24"/>
+      </g>
+
+      <g opacity="0.30">
+        <circle cx="320" cy="40" r="18" fill="white" transform="rotate(${a} 320 40)"/>
+        <rect x="280" y="76" width="90" height="30" rx="10" fill="white" transform="rotate(${b} 325 91)"/>
+      </g>
+
+      <g opacity="0.85">
+        <text x="14" y="124" font-family="ui-sans-serif,system-ui" font-weight="900" font-size="26" fill="rgba(0,0,0,0.35)">SPIRELITE</text>
+        <text x="14" y="124" font-family="ui-sans-serif,system-ui" font-weight="900" font-size="26" fill="rgba(255,255,255,0.70)">SPIRELITE</text>
+      </g>
+    </svg>`;
+    return svgDataUri(svg);
+  }
+
+  function enemyPortraitUri(enemyId) {
+    const colors = {
+      slime: ["#5cc8ff", "#6b5cff"],
+      cultist: ["#ff5c7a", "#6b5cff"],
+      fang: ["#ffcc66", "#ff5c7a"],
+      golem: ["#aeb6e6", "#5cc8ff"],
+      seer: ["#39d98a", "#6b5cff"],
+    }[enemyId] || ["#aeb6e6", "#6b5cff"];
+
+    const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="140" height="140">
+      <defs>
+        <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="${colors[0]}"/>
+          <stop offset="1" stop-color="${colors[1]}"/>
+        </linearGradient>
+      </defs>
+      <rect width="100%" height="100%" rx="24" fill="#0b0f1a"/>
+      <rect width="100%" height="100%" rx="24" fill="url(#g)" opacity="0.55"/>
+      <circle cx="70" cy="74" r="42" fill="rgba(0,0,0,0.22)"/>
+      <circle cx="52" cy="66" r="8" fill="rgba(255,255,255,0.75)"/>
+      <circle cx="88" cy="66" r="8" fill="rgba(255,255,255,0.75)"/>
+      <path d="M48 92 Q70 110 92 92" stroke="rgba(255,255,255,0.65)" stroke-width="6" fill="none" stroke-linecap="round"/>
+    </svg>`;
+    return svgDataUri(svg);
+  }
+
+  function intentIcon(intent) {
+    if (!intent) return "…";
+    const map = { attack: "⚔️", block: "🛡️", buff: "✨", debuff: "☠️", multi: "🔁" };
+    return map[intent.type] || "❔";
+  }
+
+  function rarityClass(r) {
+    if (r === "Rare") return "rare";
+    if (r === "Uncommon") return "uncommon";
+    return "common";
+  }
+
+  function typeFrameClass(type) {
+    const t = (type || "").toLowerCase();
+    if (t.includes("attack")) return "attack";
+    if (t.includes("skill")) return "skill";
+    return "power";
+  }
+
   // ---------- Card & Relic Libraries ----------
-  // Card schema:
-  // { id, name, cost, type, desc, tags, rarity, exhaust?, upgrade?:{...}, play(ctx) }
   const Cards = {};
   const makeCard = (c) => (Cards[c.id] = c);
 
   const dmgText = (n) => `${n} dmg`;
   const blockText = (n) => `${n} block`;
 
-  // Core starter cards
+  // Starter cards
   makeCard({
     id: "strike",
     name: "Strike",
@@ -292,7 +392,7 @@
     state = {
       seed: Date.now(),
       floor: 1,
-      phase: "map", // map | combat | reward | shop | rest | event | treasure | gameover
+      phase: "map",
       player: {
         maxHp: 70,
         hp: 70,
@@ -316,15 +416,11 @@
       message: "Choose your next room.",
     };
 
-    // Starter deck
     addToDeck("strike", 5);
     addToDeck("defend", 5);
     addToDeck("bash", 1);
 
-    // Starter relic
     gainRelic(randomRelic(["luckycoin", "ironheart", "swiftgloves"]));
-
-    // Start-of-floor relic triggers
     triggerRelics("onNewFloor");
 
     logClear();
@@ -362,7 +458,7 @@
   function drawCards(n) {
     for (let i = 0; i < n; i++) {
       if (state.player.draw.length === 0) rebuildDrawPile();
-      if (state.player.draw.length === 0) return; // no cards anywhere
+      if (state.player.draw.length === 0) return;
       state.player.hand.push(state.player.draw.pop());
     }
     renderAll();
@@ -380,7 +476,6 @@
     state.player.energy = baseEnergy();
     state.player.damageReduction = 0;
 
-    // Set up piles
     state.player.draw = shuffle([...state.player.deck]);
     state.player.hand = [];
     state.player.discard = [];
@@ -389,12 +484,12 @@
     state.combat = {
       turn: 1,
       enemies: encounter.enemies.map(cloneEnemy),
+      selectedTarget: 0,
+      kind: encounter.kind || "battle",
     };
 
-    // Roll intents
     for (const e of state.combat.enemies) rollIntent(e);
 
-    // Start effects
     applyTurnStartPlayerEffects();
     drawCards(baseHandSize());
     triggerRelics("onCombatStart");
@@ -403,71 +498,52 @@
     renderAll();
   }
 
-  function baseEnergy() {
-    // (easy expansion later) — relics could modify this
-    return 3;
-  }
-
-  function baseHandSize() {
-    return 5;
-  }
+  function baseEnergy() { return 3; }
+  function baseHandSize() { return 5; }
 
   function endPlayerTurn() {
     if (state.phase !== "combat") return;
 
-    // end-of-turn: keep block? no (StS style reset)
     discardHand();
 
-    // Enemy turn
     for (const e of livingEnemies()) enemyAct(e);
 
-    // Cleanup dead
     cleanupDeadEnemies();
 
-    // Check win/lose
-    if (state.player.hp <= 0) {
-      gameOver();
-      return;
-    }
-    if (livingEnemies().length === 0) {
-      winCombat();
-      return;
-    }
+    if (state.player.hp <= 0) { gameOver(); return; }
+    if (livingEnemies().length === 0) { winCombat(); return; }
 
-    // Next turn
     state.combat.turn += 1;
     state.player.block = 0;
     state.player.energy = baseEnergy();
     state.player.damageReduction = 0;
 
-    // Tick player statuses
     tickStatus(state.player.status);
-    // Apply delayed strength
+
     if (state.player.nextStr > 0) {
       state.player.str += state.player.nextStr;
       log(`Gained +${state.player.nextStr} Strength.`, "good");
       state.player.nextStr = 0;
     }
-    // Self weak next
+
     if (state.player.selfWeakNext > 0) {
       applyStatus(state.player, "weak", state.player.selfWeakNext);
       log(`You became Weak.`, "warn");
       state.player.selfWeakNext = 0;
     }
 
-    // Enemy intents reroll
     for (const e of livingEnemies()) rollIntent(e);
 
-    // Draw
     applyTurnStartPlayerEffects();
     drawCards(baseHandSize());
+
+    // keep selectedTarget in bounds
+    state.combat.selectedTarget = clamp(state.combat.selectedTarget, 0, Math.max(0, livingEnemies().length - 1));
 
     renderAll();
   }
 
-  function applyTurnStartPlayerEffects() {
-    // Placeholder for future effects
-  }
+  function applyTurnStartPlayerEffects() { /* future hooks */ }
 
   function playCardFromHand(index, targetIndex = 0) {
     if (state.phase !== "combat") return;
@@ -483,7 +559,6 @@
 
     state.player.energy -= card.cost;
 
-    // context for card logic
     const ctx = {
       upgraded: cardInst.upgraded,
       source: "player",
@@ -492,16 +567,15 @@
 
     card.play(ctx);
 
-    // move card to discard/exhaust
     const removed = state.player.hand.splice(index, 1)[0];
     if (card.exhaust) state.player.exhaust.push(removed);
     else state.player.discard.push(removed);
 
     cleanupDeadEnemies();
-    if (livingEnemies().length === 0) {
-      winCombat();
-      return;
-    }
+    if (livingEnemies().length === 0) { winCombat(); return; }
+
+    // if a target died, clamp
+    state.combat.selectedTarget = clamp(state.combat.selectedTarget, 0, Math.max(0, livingEnemies().length - 1));
 
     renderAll();
   }
@@ -517,17 +591,17 @@
     if (!target) return;
     let dmg = amount;
 
-    // Strength only for player attacks unless ignoreStrength
     if (!opts.ignoreStrength && ctx?.source === "player") dmg += state.player.str;
 
-    // Weak / Vulnerable
-    const attackerStatus = ctx?.source === "player" ? state.player.status : (ctx?.source === "enemy" ? ctx.enemy.status : null);
+    const attackerStatus =
+      ctx?.source === "player" ? state.player.status :
+      ctx?.source === "enemy" ? ctx.enemy.status : null;
+
     if (attackerStatus?.weak) dmg = Math.floor(dmg * 0.75);
     if (target.status?.vuln) dmg = Math.floor(dmg * 1.25);
 
     dmg = Math.max(0, dmg);
 
-    // Block + damage reduction (player only)
     if (target === state.player) {
       dmg = Math.max(0, dmg - (state.player.damageReduction || 0));
       const blocked = Math.min(state.player.block, dmg);
@@ -539,7 +613,6 @@
       return;
     }
 
-    // Enemy block
     const blocked = Math.min(target.block, dmg);
     target.block -= blocked;
     dmg -= blocked;
@@ -572,8 +645,6 @@
 
   function enemyAct(enemy) {
     if (!enemy.intent) rollIntent(enemy);
-
-    // reset enemy block each turn (simple)
     enemy.block = 0;
 
     const intent = enemy.intent;
@@ -590,19 +661,18 @@
       if (intent.debuff === "vuln") applyStatus(state.player, "vuln", intent.amount);
       log(`${enemy.name} applied ${intent.debuff}.`, "warn");
     } else if (intent.type === "multi") {
-      for (let i = 0; i < intent.hits; i++) dealDamage({ source: "enemy", enemy }, state.player, intent.amount);
+      for (let i = 0; i < intent.hits; i++) {
+        dealDamage({ source: "enemy", enemy }, state.player, intent.amount);
+      }
     }
 
-    // tick enemy statuses after action
     tickStatus(enemy.status);
   }
 
   function cleanupDeadEnemies() {
     const before = state.combat.enemies.length;
     state.combat.enemies = state.combat.enemies.filter(e => e.hp > 0);
-    if (state.combat.enemies.length < before) {
-      // keep intents stable for remaining
-    }
+    if (state.combat.enemies.length < before) { /* ok */ }
   }
 
   function livingEnemies() {
@@ -640,8 +710,6 @@
     const base = EnemyDefs[enemy.id];
     const t = choice(base.intents);
     const depth = state.floor;
-
-    // scale slightly with floor
     const scale = 1 + Math.floor((depth - 1) / 4);
 
     if (t === "attack") {
@@ -660,7 +728,6 @@
 
   function generateEncounter(kind = "battle") {
     const depth = state.floor;
-
     const pool = ["slime", "cultist", "fang", "golem", "seer"];
     const enemyCount =
       kind === "elite" ? rint(2, 3) :
@@ -670,8 +737,7 @@
     const enemies = [];
     for (let i = 0; i < enemyCount; i++) enemies.push(EnemyDefs[choice(pool)]);
 
-    // Elite bump: bigger hp
-    const encounter = {
+    return {
       name: kind === "elite" ? "Elite Pack" : "Battle",
       kind,
       enemies: enemies.map(e => ({
@@ -679,7 +745,6 @@
         maxHp: e.maxHp + (kind === "elite" ? 10 : 0) + Math.floor((depth - 1) * 1.5),
       })),
     };
-    return encounter;
   }
 
   // ---------- Rooms / Map ----------
@@ -724,8 +789,6 @@
 
   function nextRoomChoices() {
     const depth = state.floor;
-
-    // weights shift with depth
     const weights = [
       ["battle", 48],
       ["elite", depth > 2 ? 12 : 6],
@@ -736,7 +799,7 @@
     ];
 
     const drawOne = () => {
-      const total = weights.reduce((s, [,w]) => s + w, 0);
+      const total = weights.reduce((s, [, w]) => s + w, 0);
       let roll = Math.random() * total;
       for (const [t, w] of weights) {
         roll -= w;
@@ -751,16 +814,11 @@
   }
 
   function enterRoom(type) {
-    // new floor
     state.message = "";
-    state.phase = "map"; // temporarily
+    state.phase = "map";
     state.currentRoom = type;
-
-    // floor increment happens when you choose the room
     const justEnteredFloor = state.floor;
     log(`Entered floor ${justEnteredFloor}: ${RoomTypes[type].name}`, "info");
-
-    // Enter
     RoomTypes[type].enter();
   }
 
@@ -786,17 +844,11 @@
 
   function generateRewards(kind) {
     const options = [];
-
-    // Reward slots: pick 1 of 3
     for (let i = 0; i < 3; i++) {
       const roll = Math.random();
-      if (roll < 0.55) {
-        options.push(makeRewardAddCard());
-      } else if (roll < 0.82) {
-        options.push(makeRewardUpgradeCard());
-      } else {
-        options.push(makeRewardRelicOrGold(kind));
-      }
+      if (roll < 0.55) options.push(makeRewardAddCard());
+      else if (roll < 0.82) options.push(makeRewardUpgradeCard());
+      else options.push(makeRewardRelicOrGold(kind));
     }
     return options;
   }
@@ -854,7 +906,6 @@
       .filter(c => c.rarity !== "Starter")
       .map(c => c.id);
 
-    // rarity weighting
     const weighted = [];
     for (const id of pool) {
       const r = Cards[id].rarity;
@@ -869,7 +920,6 @@
 
   function randomRelic(allowedIds = null) {
     const pool = allowedIds ? allowedIds : Object.keys(Relics);
-    // avoid duplicates if possible
     const notOwned = pool.filter(id => !state.player.relics.includes(id));
     return choice(notOwned.length ? notOwned : pool);
   }
@@ -905,7 +955,9 @@
       cards: cards.map(id => ({
         type: "card",
         id,
-        price: Cards[id].rarity === "Rare" ? rint(135, 160) : Cards[id].rarity === "Uncommon" ? rint(95, 120) : rint(60, 85)
+        price: Cards[id].rarity === "Rare" ? rint(135, 160)
+             : Cards[id].rarity === "Uncommon" ? rint(95, 120)
+             : rint(60, 85)
       })),
       relics: relics.map(id => ({
         type: "relic",
@@ -1042,6 +1094,7 @@
     const rlist = state.player.relics.map(id => `• ${Relics[id].name}`).join("\n");
     $("leftNote").textContent =
       `Tip: Click a card to play it.\n` +
+      `Tip: Click an enemy to target it.\n` +
       `End your turn when you're out of energy.\n\n` +
       `Relics:\n${rlist || "• (none)"}`;
   }
@@ -1057,27 +1110,19 @@
     const screen = $("screen");
     screen.innerHTML = "";
 
-    if (state.phase === "map") {
-      screen.appendChild(renderMap());
-    } else if (state.phase === "combat") {
-      screen.appendChild(renderCombat());
-    } else if (state.phase === "reward") {
-      screen.appendChild(renderRewards());
-    } else if (state.phase === "shop") {
-      screen.appendChild(renderShop());
-    } else if (state.phase === "rest") {
-      screen.appendChild(renderRest());
-    } else if (state.phase === "event") {
-      screen.appendChild(renderEvent());
-    } else if (state.phase === "treasure") {
-      screen.appendChild(renderTreasure());
-    } else if (state.phase === "gameover") {
-      screen.appendChild(renderGameOver());
-    }
+    if (state.phase === "map") screen.appendChild(renderMap());
+    else if (state.phase === "combat") screen.appendChild(renderCombat());
+    else if (state.phase === "reward") screen.appendChild(renderRewards());
+    else if (state.phase === "shop") screen.appendChild(renderShop());
+    else if (state.phase === "rest") screen.appendChild(renderRest());
+    else if (state.phase === "event") screen.appendChild(renderEvent());
+    else if (state.phase === "treasure") screen.appendChild(renderTreasure());
+    else if (state.phase === "gameover") screen.appendChild(renderGameOver());
   }
 
   function renderMap() {
     const wrap = document.createElement("div");
+
     const title = document.createElement("div");
     title.className = "roomCard";
     title.innerHTML = `
@@ -1110,19 +1155,12 @@
       const btn = document.createElement("button");
       btn.className = "btn";
       btn.textContent = `Enter ${rt.name}`;
-      btn.onclick = () => {
-        // choosing a room advances to the next floor first
-        // (floor 1 = first choice screen, then enter room on floor 1)
-        // After you finish the room, you'll advance to next floor.
-        enterRoom(t);
-      };
+      btn.onclick = () => enterRoom(t);
       card.appendChild(btn);
       grid.appendChild(card);
     }
-    wrap.appendChild(grid);
 
-    // After each "room resolution" we advance floor (so map shows new floor)
-    // We do it when leaving non-combat phases (button handlers below).
+    wrap.appendChild(grid);
     return wrap;
   }
 
@@ -1136,7 +1174,7 @@
     left.className = "roomCard";
     left.innerHTML = `
       <h3>Combat — Turn ${state.combat.turn}</h3>
-      <p>Enemies show their intent. Block reduces damage this turn only.</p>
+      <p>Click an enemy to target it. Enemies show intent.</p>
       <div class="roomMeta">
         <span class="badge">Energy: ${state.player.energy}</span>
         <span class="badge">Strength: ${state.player.str}</span>
@@ -1159,32 +1197,47 @@
     enemies.forEach((e, i) => {
       const el = document.createElement("div");
       el.className = "enemy";
+      if (state.combat.selectedTarget === i) el.classList.add("selected");
+
       const hpPct = Math.floor((e.hp / e.maxHp) * 100);
       el.innerHTML = `
-        <div class="enemyName">${e.name}</div>
-        <div class="enemyHP">${e.hp} / ${e.maxHp} ${e.block ? `• Block ${e.block}` : ""}</div>
+        <div class="enemyTop">
+          <div class="enemyPortrait">
+            <img src="${enemyPortraitUri(e.id)}" alt="${e.name}">
+          </div>
+          <div>
+            <div class="enemyName">${e.name}</div>
+            <div class="enemyHP">${e.hp} / ${e.maxHp} ${e.block ? `• Block ${e.block}` : ""}</div>
+          </div>
+        </div>
+
         <div class="enemyBar"><div class="enemyFill" style="width:${hpPct}%;"></div></div>
+
         <div class="enemyLine">
           <span>Status: ${statusLine(e.status)}</span>
-          <span class="intent">Intent: ${intentText(e.intent)}</span>
+          <span class="intent">
+            <span class="intentIcon">${intentIcon(e.intent)}</span>
+            ${intentText(e.intent)}
+          </span>
         </div>
-        <div class="enemyLine"><span>Target: #${i + 1}</span><span>Str: ${e.str}</span></div>
       `;
+
+      el.onclick = () => {
+        state.combat.selectedTarget = i;
+        renderAll();
+      };
+
       enemiesWrap.appendChild(el);
     });
 
     top.appendChild(enemiesWrap);
     wrap.appendChild(top);
 
-    // Hand
     const hand = document.createElement("div");
     hand.className = "hand";
     hand.innerHTML = `
       <div class="handHead">
-        <div><strong>Your Hand</strong> <span class="pill">Click to play</span></div>
-        <div class="row">
-          <span class="pill">Tip: Shift+Click sets target #2, Alt+Click sets target #3</span>
-        </div>
+        <div><strong>Your Hand</strong> <span class="pill">Click a card to play</span></div>
       </div>
     `;
 
@@ -1195,27 +1248,40 @@
       const c = makePlayable(inst);
       const playable = c.cost <= state.player.energy;
 
+      const base = Cards[inst.baseId];
+      const rarity = rarityClass(base.rarity);
+      const frame = typeFrameClass(base.type);
+
       const card = document.createElement("div");
-      card.className = `card ${playable ? "playable" : "unplayable"}`;
+      card.className = `card cardGlow ${rarity} ${playable ? "playable" : "unplayable"}`;
+
       card.innerHTML = `
+        <div class="cardFrame ${frame}"></div>
+
+        <div class="cardArt">
+          <img src="${cardArtUri(inst.baseId, base.type)}" alt="">
+        </div>
+
         <div class="top">
           <div class="name">${c.displayName}</div>
           <div class="cost">${c.cost}</div>
         </div>
-        <div class="type">${c.type} • ${Cards[inst.baseId].rarity}${inst.upgraded ? " • Upgraded" : ""}</div>
+
+        <div class="type">
+          <span>${c.type} • ${base.rarity}</span>
+          <span>${inst.upgraded ? `<span class="tag up">UPGRADED</span>` : ""}</span>
+        </div>
+
         <div class="desc">${c.displayDesc}</div>
-        <div class="tags">${(c.tags||[]).map(t=>`<span class="tag">${t}</span>`).join("")}</div>
+
+        <div class="tags">
+          ${(c.tags || []).map(t => `<span class="tag">${t}</span>`).join("")}
+        </div>
       `;
 
-      card.onclick = (ev) => {
+      card.onclick = () => {
         if (!playable) return;
-
-        // targeting quick modifier
-        let t = 0;
-        if (ev.shiftKey) t = 1;
-        if (ev.altKey) t = 2;
-
-        playCardFromHand(idx, t);
+        playCardFromHand(idx, state.combat.selectedTarget);
       };
 
       cardsRow.appendChild(card);
@@ -1239,6 +1305,7 @@
 
   function renderRewards() {
     const wrap = document.createElement("div");
+
     const head = document.createElement("div");
     head.className = "roomCard";
     head.innerHTML = `
@@ -1268,9 +1335,7 @@
       const btn = document.createElement("button");
       btn.className = "btn";
       btn.textContent = "Choose";
-      btn.onclick = () => {
-        handleRewardChoice(r);
-      };
+      btn.onclick = () => handleRewardChoice(r);
 
       card.appendChild(btn);
       grid.appendChild(card);
@@ -1311,11 +1376,12 @@
 
   function renderShop() {
     const wrap = document.createElement("div");
+
     const head = document.createElement("div");
     head.className = "roomCard";
     head.innerHTML = `
       <h3>Shop</h3>
-      <p>Buy stuff to scale. You can also remove a card (thinning your deck is strong).</p>
+      <p>Buy cards/relics, heal, or remove a card.</p>
       <div class="roomMeta">
         <span class="badge good">Gold: ${state.player.gold}</span>
         <span class="badge">Deck: ${state.player.deck.length}</span>
@@ -1326,27 +1392,21 @@
     const grid = document.createElement("div");
     grid.className = "choiceGrid";
 
-    // cards
     const cardBox = document.createElement("div");
     cardBox.className = "roomCard";
     cardBox.innerHTML = `<h3>Cards</h3><p>Pick a card to buy.</p>`;
     const cg = document.createElement("div");
     cg.className = "cardGrid";
-    for (const it of state.shop.cards) {
-      cg.appendChild(renderShopItem(it));
-    }
+    for (const it of state.shop.cards) cg.appendChild(renderShopItem(it));
     cardBox.appendChild(cg);
     grid.appendChild(cardBox);
 
-    // relics
     const relicBox = document.createElement("div");
     relicBox.className = "roomCard";
-    relicBox.innerHTML = `<h3>Relics</h3><p>Powerful passive effects.</p>`;
+    relicBox.innerHTML = `<h3>Relics</h3><p>Passive power.</p>`;
     const rg = document.createElement("div");
     rg.className = "cardGrid";
-    for (const it of state.shop.relics) {
-      rg.appendChild(renderShopItem(it));
-    }
+    for (const it of state.shop.relics) rg.appendChild(renderShopItem(it));
     relicBox.appendChild(rg);
     grid.appendChild(relicBox);
 
@@ -1354,7 +1414,7 @@
 
     const actions = document.createElement("div");
     actions.className = "roomCard";
-    actions.innerHTML = `<h3>Services</h3><p>Sometimes the boring choice is the correct choice.</p>`;
+    actions.innerHTML = `<h3>Services</h3><p>Healing and removing are often the best buys.</p>`;
     const row = document.createElement("div");
     row.className = "row";
 
@@ -1399,21 +1459,27 @@
 
   function renderShopItem(item) {
     const el = document.createElement("div");
-    el.className = "card";
+    el.className = "card playable";
+
     if (item.type === "card") {
       const c = Cards[item.id];
+      const rarity = rarityClass(c.rarity);
+      const frame = typeFrameClass(c.type);
+      el.className = `card cardGlow ${rarity} playable`;
       el.innerHTML = `
+        <div class="cardFrame ${frame}"></div>
+        <div class="cardArt">
+          <img src="${cardArtUri(item.id, c.type)}" alt="">
+        </div>
         <div class="top"><div class="name">${c.name}</div><div class="cost">${item.price}g</div></div>
-        <div class="type">${c.type} • ${c.rarity}</div>
+        <div class="type"><span>${c.type} • ${c.rarity}</span></div>
         <div class="desc">${c.desc}</div>
       `;
-      el.classList.add("playable");
       el.onclick = () => {
         if (state.player.gold < item.price) { log("Not enough gold.", "warn"); return; }
         state.player.gold -= item.price;
         state.player.deck.push({ baseId: item.id, upgraded: false });
         log(`Bought ${c.name}.`, "good");
-        // remove from stock
         state.shop.cards = state.shop.cards.filter(x => x !== item);
         renderAll();
       };
@@ -1421,10 +1487,9 @@
       const r = Relics[item.id];
       el.innerHTML = `
         <div class="top"><div class="name">${r.name}</div><div class="cost">${item.price}g</div></div>
-        <div class="type">Relic • ${r.rarity}</div>
+        <div class="type"><span>Relic • ${r.rarity}</span></div>
         <div class="desc">${r.desc}</div>
       `;
-      el.classList.add("playable");
       el.onclick = () => {
         if (state.player.gold < item.price) { log("Not enough gold.", "warn"); return; }
         state.player.gold -= item.price;
@@ -1433,16 +1498,18 @@
         renderAll();
       };
     }
+
     return el;
   }
 
   function renderRest() {
     const wrap = document.createElement("div");
+
     const head = document.createElement("div");
     head.className = "roomCard";
     head.innerHTML = `
       <h3>Rest Site</h3>
-      <p>Choose carefully: healing is safety, upgrading is power.</p>
+      <p>Heal or upgrade a card.</p>
       <div class="roomMeta">
         <span class="badge good">HP: ${state.player.hp}/${state.player.maxHp}</span>
         <span class="badge">Deck: ${state.player.deck.length}</span>
@@ -1454,10 +1521,7 @@
     box.className = "roomCard";
 
     const healAmount = Math.floor(state.player.maxHp * 0.28);
-    box.innerHTML = `
-      <h3>Options</h3>
-      <p>Heal restores ${healAmount} HP (28% max). Upgrade makes a card stronger permanently.</p>
-    `;
+    box.innerHTML = `<h3>Options</h3><p>Rest: +${healAmount} HP • Smith: upgrade a card</p>`;
 
     const row = document.createElement("div");
     row.className = "row";
@@ -1504,18 +1568,18 @@
     const card = document.createElement("div");
     card.className = "roomCard";
     card.innerHTML = `<h3>${e.title}</h3><p>${e.text}</p>`;
+
     const row = document.createElement("div");
     row.className = "row";
+
     e.options.forEach((opt) => {
       const b = document.createElement("button");
       b.className = "btn";
       b.textContent = opt.label;
-      b.onclick = () => {
-        opt.effect();
-        endRoomAndGoMap();
-      };
+      b.onclick = () => { opt.effect(); endRoomAndGoMap(); };
       row.appendChild(b);
     });
+
     card.appendChild(row);
     wrap.appendChild(card);
     return wrap;
@@ -1537,6 +1601,7 @@
       else { state.player.gold += t.gold; log(`+${t.gold} gold.`, "good"); }
       endRoomAndGoMap();
     };
+
     card.appendChild(btn);
     wrap.appendChild(card);
     return wrap;
@@ -1583,11 +1648,17 @@
 
     state.player.deck.forEach((inst) => {
       const c = makePlayable(inst);
+      const base = Cards[inst.baseId];
+      const rarity = rarityClass(base.rarity);
+      const frame = typeFrameClass(base.type);
+
       const el = document.createElement("div");
-      el.className = "card";
+      el.className = `card cardGlow ${rarity}`;
       el.innerHTML = `
+        <div class="cardFrame ${frame}"></div>
+        <div class="cardArt"><img src="${cardArtUri(inst.baseId, base.type)}" alt=""></div>
         <div class="top"><div class="name">${c.displayName}</div><div class="cost">${c.cost}</div></div>
-        <div class="type">${c.type} • ${Cards[inst.baseId].rarity}</div>
+        <div class="type"><span>${c.type} • ${base.rarity}</span>${inst.upgraded ? `<span class="tag up">UPGRADED</span>` : ""}</div>
         <div class="desc">${c.displayDesc}</div>
       `;
       grid.appendChild(el);
@@ -1604,11 +1675,16 @@
 
     cardIds.forEach((id) => {
       const c = Cards[id];
+      const rarity = rarityClass(c.rarity);
+      const frame = typeFrameClass(c.type);
+
       const el = document.createElement("div");
-      el.className = "card playable";
+      el.className = `card cardGlow ${rarity} playable`;
       el.innerHTML = `
+        <div class="cardFrame ${frame}"></div>
+        <div class="cardArt"><img src="${cardArtUri(id, c.type)}" alt=""></div>
         <div class="top"><div class="name">${c.name}</div><div class="cost">${c.cost}</div></div>
-        <div class="type">${c.type} • ${c.rarity}</div>
+        <div class="type"><span>${c.type} • ${c.rarity}</span></div>
         <div class="desc">${c.desc}</div>
       `;
       el.onclick = () => onPick(id);
@@ -1626,13 +1702,20 @@
 
     state.player.deck.forEach((inst, idx) => {
       const base = Cards[inst.baseId];
+      const rarity = rarityClass(base.rarity);
+      const frame = typeFrameClass(base.type);
+
       const el = document.createElement("div");
-      el.className = `card ${(!inst.upgraded && base.upgrade) ? "playable" : "unplayable"}`;
+      el.className = `card cardGlow ${rarity} ${(!inst.upgraded && base.upgrade) ? "playable" : "unplayable"}`;
+
       el.innerHTML = `
+        <div class="cardFrame ${frame}"></div>
+        <div class="cardArt"><img src="${cardArtUri(inst.baseId, base.type)}" alt=""></div>
         <div class="top"><div class="name">${cardName(inst)}</div><div class="cost">${base.cost}</div></div>
-        <div class="type">${base.type} • ${base.rarity}</div>
+        <div class="type"><span>${base.type} • ${base.rarity}</span></div>
         <div class="desc">${inst.upgraded ? "Already upgraded." : (base.upgrade?.desc || "No upgrade available.")}</div>
       `;
+
       if (!inst.upgraded && base.upgrade) el.onclick = () => onPickIndex(idx);
       grid.appendChild(el);
     });
@@ -1648,11 +1731,16 @@
 
     state.player.deck.forEach((inst, idx) => {
       const base = Cards[inst.baseId];
+      const rarity = rarityClass(base.rarity);
+      const frame = typeFrameClass(base.type);
+
       const el = document.createElement("div");
-      el.className = "card playable";
+      el.className = `card cardGlow ${rarity} playable`;
       el.innerHTML = `
+        <div class="cardFrame ${frame}"></div>
+        <div class="cardArt"><img src="${cardArtUri(inst.baseId, base.type)}" alt=""></div>
         <div class="top"><div class="name">${cardName(inst)}</div><div class="cost">${base.cost}</div></div>
-        <div class="type">${base.type} • ${base.rarity}</div>
+        <div class="type"><span>${base.type} • ${base.rarity}</span></div>
         <div class="desc">${base.desc}</div>
       `;
       el.onclick = () => onPickIndex(idx);
@@ -1665,7 +1753,6 @@
 
   // ---------- Room end / Flow ----------
   function endRoomAndGoMap() {
-    // after any room resolution (combat reward, shop leave, rest leave, event choice, treasure claim)
     advanceFloor();
     state.phase = "map";
     state.pendingRewards = null;
@@ -1673,7 +1760,6 @@
     state.event = null;
     state.treasure = null;
 
-    // small floor scaling: tiny heal every 5 floors
     if (state.floor % 5 === 0) {
       healPlayer(4);
       log("Milestone breather: +4 HP.", "good");
@@ -1707,9 +1793,6 @@
     try {
       const loaded = JSON.parse(raw);
       state = loaded;
-
-      // Guard: rebuild functions are in code, state is plain data: OK.
-      // Ensure missing properties don't crash older saves
       state.player.status ||= { weak: 0, vuln: 0 };
       state.player.relics ||= [];
       log("Loaded run.", "info");
