@@ -22,6 +22,7 @@ export function loadRun() {
 
   loaded.player.status ||= { weak: 0, vuln: 0 };
   loaded.player.relics ||= [];
+  loaded.player.powers ||= {};
   setState(loaded);
   log("Loaded run.", "info");
   return true;
