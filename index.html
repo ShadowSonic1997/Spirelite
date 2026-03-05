@@ -4,78 +4,85 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Spirelite</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="./style.css" />
 </head>
+
 <body>
   <header class="topbar">
     <div class="brand">
-      <div class="logo">♠</div>
+      <div class="logo">S</div>
       <div>
         <div class="title">Spirelite</div>
-        <div class="subtitle">Deck roguelite (GitHub Pages-ready)</div>
+        <div class="subtitle">A tiny Slay-the-Spire-ish roguelite</div>
       </div>
     </div>
 
     <div class="hud">
-      <div class="pill" id="hudFloor">Floor: 1</div>
-      <div class="pill" id="hudGold">Gold: 0</div>
-      <div class="pill" id="hudRelics">Relics: 0</div>
-      <button class="btn ghost" id="btnNewRun" title="Start a new run">New Run</button>
+      <span class="pill" id="hudFloor">Floor: 1</span>
+      <span class="pill" id="hudGold">Gold: 0</span>
+      <span class="pill" id="hudRelics">Relics: 0</span>
+
+      <button class="btn" id="btnNewRun">New Run</button>
+      <button class="btn ghost" id="btnViewDeck">View Deck</button>
+      <button class="btn ghost" id="btnSave">Save</button>
+      <button class="btn ghost" id="btnLoad">Load</button>
     </div>
   </header>
 
   <main class="layout">
-    <section class="panel left">
+    <!-- LEFT PANEL -->
+    <section class="panel">
       <h2>Player</h2>
+
       <div class="stats">
         <div class="stat">
           <div class="label">HP</div>
-          <div class="value" id="pHp"></div>
-          <div class="bar"><div class="fill" id="pHpBar"></div></div>
+          <div class="value" id="pHp">70 / 70</div>
+          <div class="bar"><div class="fill" id="pHpBar" style="width:100%"></div></div>
         </div>
+
         <div class="stat">
           <div class="label">Block</div>
-          <div class="value" id="pBlock"></div>
+          <div class="value" id="pBlock">0</div>
         </div>
+
         <div class="stat">
           <div class="label">Energy</div>
-          <div class="value" id="pEnergy"></div>
+          <div class="value" id="pEnergy">3</div>
         </div>
+
         <div class="stat">
           <div class="label">Status</div>
-          <div class="value small" id="pStatus"></div>
+          <div class="value small" id="pStatus">None</div>
         </div>
-      </div>
 
-      <h2>Deck</h2>
-      <div class="deckRow">
-        <div class="pill">Draw: <span id="drawCount">0</span></div>
-        <div class="pill">Discard: <span id="discardCount">0</span></div>
-        <div class="pill">Exhaust: <span id="exhaustCount">0</span></div>
-      </div>
-
-      <div class="row">
-        <button class="btn" id="btnViewDeck">View Deck</button>
-        <button class="btn ghost" id="btnSave">Save</button>
-        <button class="btn ghost" id="btnLoad">Load</button>
+        <div class="stat">
+          <div class="label">Piles</div>
+          <div class="deckRow">
+            <span class="badge">Draw: <strong id="drawCount">0</strong></span>
+            <span class="badge">Discard: <strong id="discardCount">0</strong></span>
+            <span class="badge">Exhaust: <strong id="exhaustCount">0</strong></span>
+          </div>
+        </div>
       </div>
 
       <div class="note" id="leftNote"></div>
     </section>
 
-    <section class="panel center">
-      <div class="screen" id="screen">
-        <!-- filled by JS -->
-      </div>
+    <!-- CENTER SCREEN -->
+    <section class="panel">
+      <h2>Run</h2>
+      <div class="screen" id="screen"></div>
     </section>
 
-    <section class="panel right">
-      <h2>Combat Log</h2>
+    <!-- RIGHT PANEL -->
+    <section class="panel">
+      <h2>Log</h2>
       <div class="log" id="log"></div>
     </section>
   </main>
 
-  <!-- modal -->
+  <!-- MODAL -->
   <div class="modalWrap hidden" id="modalWrap">
     <div class="modal">
       <div class="modalHead">
@@ -86,6 +93,7 @@
     </div>
   </div>
 
-  <script src="game.js"></script>
+  <!-- ENTRY -->
+  <script type="module" src="./src/main.js"></script>
 </body>
 </html>
