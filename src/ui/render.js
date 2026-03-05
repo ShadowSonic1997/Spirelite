@@ -2,7 +2,7 @@ import { state } from "../state.js";
 import { Cards } from "../content/cards.js";
 import { Relics } from "../content/relics.js";
 import { $ } from "../utils.js";
-import { makePlayable, cardName } from "../systems/combat.js";
+import { makePlayable } from "../systems/combat.js";
 import { cardArtUri, rarityClass, typeFrameClass } from "../visuals/svg.js";
 import { closeModal } from "./modal.js";
 
@@ -128,7 +128,6 @@ export function modalUpgradePick(onPickIndex) {
       can ? () => { onPickIndex(idx); closeModal(); } : null
     );
 
-    // show upgrade desc if available
     const desc = el.querySelector(".desc");
     desc.textContent = inst.upgraded ? "Already upgraded." : (base.upgrade?.desc || "No upgrade available.");
 
