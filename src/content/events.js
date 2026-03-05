@@ -29,6 +29,27 @@ export function generateEvent() {
         { label: "Decline", kind: "none" },
       ],
     },
+
+    // NEW
+    {
+      title: "Astral Library",
+      text: "Rows of floating books whisper your future deck choices.",
+      options: [
+        { label: "Study (+1 random card, upgrade it)", kind: "card_upgrade" },
+        { label: "Skim (+35 gold)", kind: "gold", gold: 35 },
+        { label: "Leave", kind: "none" },
+      ],
+    },
+    {
+      title: "Broken Automaton",
+      text: "A sparking automaton offers you its core… but it’s unstable.",
+      options: [
+        { label: "Take the core (+1 relic, become Weak 2)", kind: "relic_weak", weak: 2 },
+        { label: "Salvage parts (+60 gold, lose 6 HP)", kind: "gold_hp", gold: 60, hp: 6 },
+        { label: "Walk away", kind: "none" },
+      ],
+    },
   ];
+
   return choice(events);
 }
