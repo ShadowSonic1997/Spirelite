@@ -10,7 +10,7 @@ export function enterShop() {
   state.shop = generateShopStock();
 }
 
-export function generateShopStock() {
+function generateShopStock() {
   const cards = randomCardOffer(5);
   const relics = [randomRelic(), randomRelic(), randomRelic()];
   return {
