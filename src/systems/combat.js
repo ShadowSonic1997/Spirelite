@@ -3,7 +3,7 @@ import { state } from "../state.js";
 import { Cards } from "../content/cards.js";
 import { cloneEnemy, rollIntent } from "../content/enemies.js";
 import { log } from "../ui/log.js";
-import { triggerRelics } from "./rewards.js"; // uses shared relic hook helper
+import { triggerRelics } from "./rewards.js";
 
 export function addToDeck(cardId, count = 1) {
   for (let i = 0; i < count; i++) state.player.deck.push({ baseId: cardId, upgraded: false });
@@ -62,6 +62,11 @@ export function pickTarget(ctx) {
 export function applyStatus(entity, key, amount) {
   entity.status ||= {};
   entity.status[key] = (entity.status[key] || 0) + amount;
+
+  // If applying debuff to an enemy, relic hooks
+  if (entity !== state.player && (key === "weak" || key === "vuln")) {
+    triggerRelics("onApplyDebuff");
+  }
 }
 
 export function tickStatus(statusObj) {
@@ -84,6 +89,18 @@ export function healPlayer(amount) {
 export function dealDamage(ctx, target, amount, opts = {}) {
   if (!target) return;
   let dmg = amount;
+
+  // Scrap Core: first Attack each turn +3 damage
+  if (ctx?.source === "player" && ctx?.cardType === "Attack") {
+    if (state.player.relics.includes("scrapcore")) {
+      state.combat.flags ||= {};
+      if (!state.combat.flags.scrap) {
+        state.combat.flags.scrap = true;
+        dmg += 3;
+        log("Scrap Core: +3 damage.", "info");
+      }
+    }
+  }
 
   if (!opts.ignoreStrength && ctx?.source === "player") dmg += state.player.str;
 
@@ -123,9 +140,12 @@ function baseHandSize() { return 5; }
 
 export function startCombat(encounter) {
   state.phase = "combat";
+  state.lastCombatKind = encounter.kind || "battle";
+
   state.player.block = 0;
   state.player.energy = baseEnergy();
   state.player.damageReduction = 0;
+  state.player.powers = {};
 
   state.player.draw = shuffle([...state.player.deck]);
   state.player.hand = [];
@@ -137,12 +157,17 @@ export function startCombat(encounter) {
     enemies: encounter.enemies.map(cloneEnemy),
     selectedTarget: 0,
     kind: encounter.kind || "battle",
+    flags: {},
   };
 
   for (const e of state.combat.enemies) rollIntent(e);
 
   drawCards(baseHandSize());
+
+  // Provide a richer relic API during combat start
+  const oldTrigger = triggerRelics;
   triggerRelics("onCombatStart");
+  triggerRelics("onTurnStart");
 }
 
 export function playCardFromHand(index, targetIndex) {
@@ -171,9 +196,15 @@ export function playCardFromHand(index, targetIndex) {
     randomLivingEnemy,
   };
 
-  const ctx = { upgraded: cardInst.upgraded, source: "player", targetIndex };
+  const ctx = { upgraded: cardInst.upgraded, source: "player", targetIndex, cardType: card.type };
 
   card.play(api, ctx);
+
+  // Power: Momentum (block on Attack)
+  if (card.type === "Attack" && state.player.powers?.momentum) {
+    state.player.block += state.player.powers.momentum;
+    log(`Momentum: +${state.player.powers.momentum} Block.`, "good");
+  }
 
   const removed = state.player.hand.splice(index, 1)[0];
   if (card.exhaust) state.player.exhaust.push(removed);
@@ -230,6 +261,9 @@ export function endPlayerTurn({ onWin, onLose }) {
     log(`You became Weak.`, "warn");
     state.player.selfWeakNext = 0;
   }
+
+  state.combat.flags ||= {};
+  triggerRelics("onTurnStart");
 
   for (const e of livingEnemies()) rollIntent(e);
 
