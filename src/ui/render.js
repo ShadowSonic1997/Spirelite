@@ -1,17 +1,15 @@
 import { state } from "../state.js";
-import { $ } from "../utils.js";
-import { RoomTypes } from "../content/rooms.js";
 import { Cards } from "../content/cards.js";
 import { Relics } from "../content/relics.js";
-import { cardArtUri, enemyPortraitUri, intentIcon, rarityClass, typeFrameClass } from "../visuals/svg.js";
-import { makePlayable, cardName, livingEnemies } from "../systems/combat.js";
-import { openModal, closeModal } from "./modal.js";
-import { randomCardOffer } from "../systems/rewards.js";
+import { $ } from "../utils.js";
+import { makePlayable, cardName } from "../systems/combat.js";
+import { cardArtUri, rarityClass, typeFrameClass } from "../visuals/svg.js";
+import { closeModal } from "./modal.js";
 
 export function statusLine(s) {
   const parts = [];
-  if (s.weak) parts.push(`Weak ${s.weak}`);
-  if (s.vuln) parts.push(`Vulnerable ${s.vuln}`);
+  if (s?.weak) parts.push(`Weak ${s.weak}`);
+  if (s?.vuln) parts.push(`Vulnerable ${s.vuln}`);
   return parts.length ? parts.join(" • ") : "None";
 }
 
@@ -42,7 +40,7 @@ export function renderLeft() {
   $("discardCount").textContent = state.player.discard.length;
   $("exhaustCount").textContent = state.player.exhaust.length;
 
-  const rlist = state.player.relics.map(id => `• ${Relics[id].name}`).join("\n");
+  const rlist = state.player.relics.map(id => `• ${Relics[id]?.name || id}`).join("\n");
   $("leftNote").textContent =
     `Tip: Click a card to play it.\n` +
     `Tip: Click an enemy to target it.\n` +
@@ -56,48 +54,103 @@ export function renderAll(renderScreenFn) {
   renderScreenFn();
 }
 
-/* Small reusable card DOM helper */
-export function renderCardDom(cardId, upgraded, playable, onClick) {
+export function renderCardDom(cardId, upgraded, playable, onClick, priceLabel = null) {
   const inst = { baseId: cardId, upgraded };
   const c = makePlayable(inst);
   const base = Cards[cardId];
+
   const rarity = rarityClass(base.rarity);
   const frame = typeFrameClass(base.type);
 
   const el = document.createElement("div");
   el.className = `card cardGlow ${rarity} ${playable ? "playable" : "unplayable"}`;
+
   el.innerHTML = `
     <div class="cardFrame ${frame}"></div>
     <div class="cardArt"><img src="${cardArtUri(cardId, base.type)}" alt=""></div>
-    <div class="top"><div class="name">${c.displayName}</div><div class="cost">${c.cost}</div></div>
-    <div class="type"><span>${c.type} • ${base.rarity}</span>${upgraded ? `<span class="tag up">UPGRADED</span>` : ""}</div>
+    <div class="top">
+      <div class="name">${c.displayName}</div>
+      <div class="cost">${priceLabel ?? c.cost}</div>
+    </div>
+    <div class="type">
+      <span>${c.type} • ${base.rarity}</span>
+      <span>${upgraded ? `<span class="tag up">UPGRADED</span>` : ""}</span>
+    </div>
     <div class="desc">${c.displayDesc}</div>
     <div class="tags">${(c.tags || []).map(t => `<span class="tag">${t}</span>`).join("")}</div>
   `;
+
   if (playable && onClick) el.onclick = onClick;
   return el;
 }
 
-/* Modal pick helpers */
-export function modalPickCard(onPick) {
-  const picks = randomCardOffer(3);
-  const wrap = document.createElement("div");
-  const grid = document.createElement("div");
-  grid.className = "cardGrid";
-  picks.forEach(id => {
-    grid.appendChild(renderCardDom(id, false, true, () => { onPick(id); closeModal(); }));
-  });
-  wrap.appendChild(grid);
-  return wrap;
-}
+/* ---------- Modals ---------- */
 
 export function modalDeckView() {
   const wrap = document.createElement("div");
   const grid = document.createElement("div");
   grid.className = "cardGrid";
   state.player.deck.forEach(inst => {
-    grid.appendChild(renderCardDom(inst.baseId, inst.upgraded, false));
+    grid.appendChild(renderCardDom(inst.baseId, inst.upgraded, false, null));
   });
+  wrap.appendChild(grid);
+  return wrap;
+}
+
+export function modalPickCards(cardIds, onPick) {
+  const wrap = document.createElement("div");
+  const grid = document.createElement("div");
+  grid.className = "cardGrid";
+
+  cardIds.forEach(id => {
+    grid.appendChild(renderCardDom(id, false, true, () => {
+      onPick(id);
+      closeModal();
+    }));
+  });
+
+  wrap.appendChild(grid);
+  return wrap;
+}
+
+export function modalUpgradePick(onPickIndex) {
+  const wrap = document.createElement("div");
+  const grid = document.createElement("div");
+  grid.className = "cardGrid";
+
+  state.player.deck.forEach((inst, idx) => {
+    const base = Cards[inst.baseId];
+    const can = !inst.upgraded && !!base.upgrade;
+    const el = renderCardDom(
+      inst.baseId,
+      inst.upgraded,
+      can,
+      can ? () => { onPickIndex(idx); closeModal(); } : null
+    );
+
+    // show upgrade desc if available
+    const desc = el.querySelector(".desc");
+    desc.textContent = inst.upgraded ? "Already upgraded." : (base.upgrade?.desc || "No upgrade available.");
+
+    grid.appendChild(el);
+  });
+
+  wrap.appendChild(grid);
+  return wrap;
+}
+
+export function modalRemovePick(onPickIndex) {
+  const wrap = document.createElement("div");
+  const grid = document.createElement("div");
+  grid.className = "cardGrid";
+
+  state.player.deck.forEach((inst, idx) => {
+    grid.appendChild(renderCardDom(inst.baseId, inst.upgraded, true, () => {
+      onPickIndex(idx);
+      closeModal();
+    }));
+  });
+
   wrap.appendChild(grid);
   return wrap;
 }
