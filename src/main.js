@@ -11,7 +11,7 @@ import { RoomTypes } from "./content/rooms.js";
 import { generateEvent } from "./content/events.js";
 
 import { log, logClear } from "./ui/log.js";
-import { bindModal, openModal, closeModal } from "./ui/modal.js";
+import { bindModal, openModal } from "./ui/modal.js";
 import {
   renderAll,
   modalDeckView,
@@ -54,7 +54,7 @@ import {
 /* ---------------- Encounter generation ---------------- */
 function generateEncounter(kind = "battle") {
   const depth = state.floor;
-  const pool = ["slime", "cultist", "fang", "golem", "seer"];
+  const pool = ["slime", "cultist", "fang", "golem", "seer", "wisp", "brute", "mimic"];
 
   const enemyCount =
     kind === "elite" ? rint(2, 3) :
@@ -78,12 +78,14 @@ function generateEncounter(kind = "battle") {
 function nextRoomChoices() {
   const depth = state.floor;
   const weights = [
-    ["battle", 48],
+    ["battle", 44],
     ["elite", depth > 2 ? 12 : 6],
     ["shop", 14],
     ["rest", 14],
     ["event", 10],
     ["treasure", 8],
+    ["forge", 8],
+    ["curse", 6],
   ];
 
   const drawOne = () => {
@@ -137,6 +139,8 @@ function enterRoom(type) {
       ? { kind: "relic", id: randomRelic(), text: "A relic rests on velvet." }
       : { kind: "gold", gold: rint(60, 120), text: "A heavy gold pouch." };
   }
+  else if (type === "forge") state.phase = "forge";
+  else if (type === "curse") state.phase = "curse";
 
   renderAll(renderScreen);
 }
@@ -175,6 +179,8 @@ function renderScreen() {
   if (state.phase === "rest") return screen.appendChild(screenRest());
   if (state.phase === "event") return screen.appendChild(screenEvent());
   if (state.phase === "treasure") return screen.appendChild(screenTreasure());
+  if (state.phase === "forge") return screen.appendChild(screenForge());
+  if (state.phase === "curse") return screen.appendChild(screenCurse());
   if (state.phase === "gameover") return screen.appendChild(screenGameOver());
 }
 
@@ -334,7 +340,6 @@ function screenCombat() {
       if (!playable) return;
       playCardFromHand(idx, state.combat.selectedTarget);
 
-      // instant win check after playing
       if (livingEnemies().length === 0) return winCombat();
 
       renderAll(renderScreen);
@@ -447,7 +452,6 @@ function screenShop() {
   cg.className = "cardGrid";
 
   state.shop.cards.forEach((it) => {
-    const base = Cards[it.id];
     const el = renderCardDom(it.id, false, true, () => {
       buyShopItem(it);
       renderAll(renderScreen);
@@ -596,7 +600,6 @@ function screenRest() {
 
 /* ---- EVENT ---- */
 function applyEventChoice(opt) {
-  // This matches the kinds from src/content/events.js (the version I posted earlier)
   const kind = opt.kind;
 
   if (kind === "heal") {
@@ -647,7 +650,34 @@ function applyEventChoice(opt) {
     return;
   }
 
-  // none / unknown
+  // NEW
+  if (kind === "gold") {
+    state.player.gold += (opt.gold || 0);
+    log(`Gained ${opt.gold} gold.`, "good");
+    return;
+  }
+
+  if (kind === "card_upgrade") {
+    const id = randomCardOffer(1)[0];
+    state.player.deck.push({ baseId: id, upgraded: true });
+    log(`Studied and found ${Cards[id].name}+`, "good");
+    return;
+  }
+
+  if (kind === "relic_weak") {
+    gainRelic(randomRelic());
+    state.player.status.weak = (state.player.status.weak || 0) + (opt.weak || 0);
+    log(`Power gained, but you feel Weak.`, "warn");
+    return;
+  }
+
+  if (kind === "gold_hp") {
+    state.player.gold += (opt.gold || 0);
+    state.player.hp = Math.max(1, state.player.hp - (opt.hp || 0));
+    log(`Salvaged ${opt.gold} gold, but lost HP.`, "warn");
+    return;
+  }
+
   log("You move on.", "info");
 }
 
@@ -705,6 +735,102 @@ function screenTreasure() {
   return wrap;
 }
 
+/* ---- FORGE ---- */
+function screenForge() {
+  const wrap = document.createElement("div");
+  const card = document.createElement("div");
+  card.className = "roomCard";
+  card.innerHTML = `<h3>Forge</h3><p>Upgrade a card for free, or transmute one card into a random card.</p>`;
+
+  const row = document.createElement("div");
+  row.className = "row";
+
+  const upgradeBtn = document.createElement("button");
+  upgradeBtn.className = "btn warn";
+  upgradeBtn.textContent = "Upgrade a card (free)";
+  upgradeBtn.onclick = () => {
+    openModal("Upgrade a card", modalUpgradePick((idx) => {
+      const inst = state.player.deck[idx];
+      const base = Cards[inst.baseId];
+      if (!inst || inst.upgraded || !base.upgrade) return;
+      inst.upgraded = true;
+      log(`Forged: upgraded ${base.name}.`, "good");
+      endRoomAndGoMap();
+    }));
+  };
+
+  const transmuteBtn = document.createElement("button");
+  transmuteBtn.className = "btn good";
+  transmuteBtn.textContent = "Transmute a card";
+  transmuteBtn.onclick = () => {
+    openModal("Pick a card to transmute", modalRemovePick((idx) => {
+      const removed = state.player.deck.splice(idx, 1)[0];
+      const newId = randomCardOffer(1)[0];
+      state.player.deck.push({ baseId: newId, upgraded: false });
+      log(`Transmuted ${removed.baseId} → ${Cards[newId].name}`, "good");
+      endRoomAndGoMap();
+    }));
+  };
+
+  const leaveBtn = document.createElement("button");
+  leaveBtn.className = "btn";
+  leaveBtn.textContent = "Leave";
+  leaveBtn.onclick = () => endRoomAndGoMap();
+
+  row.appendChild(upgradeBtn);
+  row.appendChild(transmuteBtn);
+  row.appendChild(leaveBtn);
+  card.appendChild(row);
+  wrap.appendChild(card);
+  return wrap;
+}
+
+/* ---- CURSE ---- */
+function screenCurse() {
+  const wrap = document.createElement("div");
+  const card = document.createElement("div");
+  card.className = "roomCard";
+
+  card.innerHTML = `
+    <h3>Cursed Hall</h3>
+    <p>A cold presence offers a deal. It feels like a terrible idea (so… a great idea).</p>
+  `;
+
+  const row = document.createElement("div");
+  row.className = "row";
+
+  const takeBtn = document.createElement("button");
+  takeBtn.className = "btn bad";
+  takeBtn.textContent = "Accept the curse (gain a relic, lose 12 HP)";
+  takeBtn.onclick = () => {
+    state.player.hp = Math.max(1, state.player.hp - 12);
+    gainRelic(randomRelic());
+    state.player.status.vuln = (state.player.status.vuln || 0) + 2;
+    log("A curse clings to you… but power follows.", "warn");
+    endRoomAndGoMap();
+  };
+
+  const fightBtn = document.createElement("button");
+  fightBtn.className = "btn warn";
+  fightBtn.textContent = "Defy it (Elite fight for big rewards)";
+  fightBtn.onclick = () => {
+    startCombat(generateEncounter("elite"));
+    renderAll(renderScreen);
+  };
+
+  const leaveBtn = document.createElement("button");
+  leaveBtn.className = "btn";
+  leaveBtn.textContent = "Back away";
+  leaveBtn.onclick = () => endRoomAndGoMap();
+
+  row.appendChild(takeBtn);
+  row.appendChild(fightBtn);
+  row.appendChild(leaveBtn);
+  card.appendChild(row);
+  wrap.appendChild(card);
+  return wrap;
+}
+
 /* ---- GAMEOVER ---- */
 function screenGameOver() {
   const wrap = document.createElement("div");
@@ -746,7 +872,7 @@ function newRun() {
   addToDeck("defend", 5);
   addToDeck("bash", 1);
 
-  gainRelic(randomRelic(["luckycoin", "ironheart", "swiftgloves"]));
+  gainRelic(randomRelic(["luckycoin", "ironheart", "swiftgloves", "matchstick"]));
   triggerRelics("onNewFloor");
 
   renderAll(renderScreen);
