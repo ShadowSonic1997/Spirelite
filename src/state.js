@@ -21,6 +21,8 @@ export function newRunState() {
       selfWeakNext: 0,
       status: { weak: 0, vuln: 0 },
 
+      powers: {},
+
       deck: [],
       draw: [],
       hand: [],
@@ -29,8 +31,9 @@ export function newRunState() {
     },
 
     combat: null,
-    pendingRewards: null,
+    lastCombatKind: "battle",
 
+    pendingRewards: null,
     shop: null,
     event: null,
     treasure: null,
