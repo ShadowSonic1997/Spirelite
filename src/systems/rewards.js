@@ -15,17 +15,16 @@ export function gainRelic(id) {
   if (!id) return;
   if (!state.player.relics.includes(id)) state.player.relics.push(id);
   const r = Relics[id];
-  log(`Relic gained: ${r.name}.`, "good");
-  if (r.onGain) r.onGain(makeRelicApi());
+  log(`Relic gained: ${r?.name || id}.`, "good");
+  if (r?.onGain) r.onGain(makeRelicApi());
 }
 
 function makeRelicApi() {
-  // keep this small; expand as needed
   return {
     state,
     log,
     healPlayer: (n) => { state.player.hp = Math.min(state.player.maxHp, state.player.hp + n); },
-    drawCards: () => {}, // combat fills this in via combat api when needed; relics that need it can be moved into combat api
+    drawCards: (n) => { /* combat injects draw; some relics call it but it’s optional */ },
     dealDamage: () => {},
     randomLivingEnemy: () => null,
   };
