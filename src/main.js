@@ -194,7 +194,7 @@ function renderScreen() {
       b.onclick = () => {
         if (r.kind === "card") {
           // simple: auto pick 1 of 3 for now; we can add your nice modal pick screens next
-          openModal("Pick a card", (await import("./ui/render.js")).modalPickCard((id) => {
+          openModal("Pick a card", modalPickCard((id) => {
             r.apply(id);
             endRoomAndGoMap();
           }));
