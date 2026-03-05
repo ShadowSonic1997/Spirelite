@@ -1,12 +1,8 @@
 export const Cards = {};
-
 export function makeCard(c) { Cards[c.id] = c; }
 
 const dmgText = (n) => `${n} dmg`;
 const blockText = (n) => `${n} block`;
-
-// NOTE: card effects call functions provided by combat system.
-// They’ll be passed in as "api" when played.
 
 makeCard({
   id: "strike",
@@ -200,4 +196,78 @@ makeCard({
     }
     if (healed > 0) api.healPlayer(healed);
   },
+});
+
+/* -------- New Cards -------- */
+
+makeCard({
+  id: "pierce",
+  name: "Pierce",
+  cost: 1,
+  type: "Attack",
+  rarity: "Common",
+  desc: `Deal 7 dmg. Ignore Block.`,
+  tags: ["Direct"],
+  upgrade: { name: "Pierce+", desc: `Deal 10 dmg. Ignore Block.` },
+  play: (api, ctx) => {
+    const t = api.pickTarget(ctx);
+    const raw = ctx.upgraded ? 10 : 7;
+    const saved = t.block;
+    t.block = 0;
+    api.dealDamage(ctx, t, raw);
+    t.block = saved;
+  }
+});
+
+makeCard({
+  id: "siphon",
+  name: "Siphon",
+  cost: 1,
+  type: "Skill",
+  rarity: "Uncommon",
+  desc: `Apply 2 Weak. Heal 4.`,
+  tags: ["Debuff", "Heal"],
+  upgrade: { name: "Siphon+", desc: `Apply 3 Weak. Heal 6.` },
+  play: (api, ctx) => {
+    const t = api.pickTarget(ctx);
+    api.applyStatus(t, "weak", ctx.upgraded ? 3 : 2);
+    api.healPlayer(ctx.upgraded ? 6 : 4);
+  }
+});
+
+makeCard({
+  id: "momentum",
+  name: "Momentum",
+  cost: 1,
+  type: "Power",
+  rarity: "Uncommon",
+  desc: `Whenever you play an Attack, gain 2 Block this combat.`,
+  tags: ["Scaling"],
+  upgrade: { name: "Momentum+", desc: `Whenever you play an Attack, gain 3 Block this combat.` },
+  play: (api, ctx) => {
+    api.state.player.powers ||= {};
+    api.state.player.powers.momentum = (api.state.player.powers.momentum || 0) + (ctx.upgraded ? 3 : 2);
+    api.log(`Momentum active.`, "good");
+  }
+});
+
+makeCard({
+  id: "allin",
+  name: "All In",
+  cost: 2,
+  type: "Attack",
+  rarity: "Rare",
+  desc: `Deal 16 dmg. If this kills, draw 2 and gain 1 energy.`,
+  tags: ["Finisher"],
+  upgrade: { name: "All In+", desc: `Deal 20 dmg. If this kills, draw 2 and gain 1 energy.` },
+  play: (api, ctx) => {
+    const t = api.pickTarget(ctx);
+    const before = t.hp;
+    api.dealDamage(ctx, t, ctx.upgraded ? 20 : 16);
+    if (before > 0 && t.hp <= 0) {
+      api.drawCards(2);
+      api.state.player.energy += 1;
+      api.log("All In chained!", "good");
+    }
+  }
 });
