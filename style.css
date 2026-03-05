@@ -407,3 +407,64 @@ body{
   .panel{ min-height:auto; }
   .log{ height:260px; }
 }
+.mapBox {
+  position: relative;
+  margin-top: 10px;
+  overflow: auto;
+  border-radius: 16px;
+  background: rgba(0,0,0,0.20);
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 10px;
+}
+
+.mapLines {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.mapLine {
+  stroke: rgba(255,255,255,0.18);
+  stroke-width: 3;
+}
+.mapLine.hot {
+  stroke: rgba(255,255,255,0.35);
+  stroke-width: 3.5;
+}
+.mapLine.preview {
+  stroke: rgba(255,255,255,0.55);
+  stroke-width: 4;
+}
+
+.mapNodes {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+}
+
+.mapNode {
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(15,18,30,0.85);
+  color: rgba(255,255,255,0.85);
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform 0.08s ease;
+}
+.mapNode:hover { transform: scale(1.08); }
+
+.mapNode.current {
+  outline: 2px solid rgba(255,255,255,0.55);
+}
+.mapNode.visited {
+  opacity: 0.65;
+}
+.mapNode.selectable {
+  border-color: rgba(255,255,255,0.45);
+}
+.mapNode.nextPreview {
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.25);
+}
