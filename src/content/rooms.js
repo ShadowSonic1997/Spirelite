@@ -29,4 +29,16 @@ export const RoomTypes = {
     badge: ["Loot", "good"],
     desc: "Grab a relic or a pile of gold.",
   },
+
+  // NEW
+  forge: {
+    name: "Forge",
+    badge: ["Upgrade", "warn"],
+    desc: "Upgrade a card for free, or transmute one card into a random new card.",
+  },
+  curse: {
+    name: "Cursed Hall",
+    badge: ["Risk", "bad"],
+    desc: "High risk, high reward. You might gain a relic… but is it worth it?",
+  },
 };
