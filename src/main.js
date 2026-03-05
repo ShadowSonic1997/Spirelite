@@ -278,6 +278,7 @@ function renderScreen() {
 }
 
 /* ---- MAP (branching + preview next rooms) ---- */
+/* ---- MAP (branching + preview next rooms) ---- */
 function screenMap() {
   const wrap = document.createElement("div");
   const m = state.map;
@@ -286,7 +287,7 @@ function screenMap() {
   head.className = "roomCard";
   head.innerHTML = `
     <h3>Map</h3>
-    <p>Click a node to preview. You’ll see what rooms it can lead to.</p>
+    <p>Click a node to preview. Click it again to enter (if it’s one of your available next nodes).</p>
     <div class="roomMeta">
       <span class="badge">Floor: ${state.floor}</span>
       <span class="badge">HP: ${state.player.hp}/${state.player.maxHp}</span>
@@ -296,9 +297,19 @@ function screenMap() {
   `;
   wrap.appendChild(head);
 
-  const mapBox = document.createElement("div");
-  mapBox.className = "mapBox";
+  // Emoji icons per room type
+  const iconFor = (type) => ({
+    battle: "⚔️",
+    elite: "💀",
+    shop: "🛒",
+    rest: "🩹",
+    event: "❓",
+    treasure: "💎",
+    forge: "🔥",
+    curse: "☠️",
+  }[type] || "⬤");
 
+  // ---- One shared coordinate space for BOTH svg + nodes ----
   const cols = m.cols;
   const rows = m.rows;
 
@@ -309,71 +320,128 @@ function screenMap() {
   const width = padX * 2 + (cols - 1) * cellW + 60;
   const height = padY * 2 + (rows - 1) * cellH + 60;
 
+  const mapWrap = document.createElement("div");
+  mapWrap.className = "mapBox";
+  // inline layout so it works even if your CSS is missing/broken
+  mapWrap.style.position = "relative";
+  mapWrap.style.overflow = "auto";
+  mapWrap.style.borderRadius = "16px";
+  mapWrap.style.border = "1px solid rgba(255,255,255,0.10)";
+  mapWrap.style.background = "rgba(0,0,0,0.18)";
+  mapWrap.style.padding = "10px";
+
+  // A single inner stage that both layers use
+  const stage = document.createElement("div");
+  stage.style.position = "relative";
+  stage.style.width = `${width}px`;
+  stage.style.height = `${height}px`;
+
+  // SVG lines layer (absolute)
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-  svg.classList.add("mapLines");
+  svg.style.position = "absolute";
+  svg.style.left = "0";
+  svg.style.top = "0";
+  svg.style.width = `${width}px`;
+  svg.style.height = `${height}px`;
 
   const getXY = (node) => ({
     x: padX + node.col * cellW + 30,
     y: padY + node.row * cellH + 30,
   });
 
-  // Lines
+  const preview = m.previewId ? m.nodes[m.previewId] : null;
+  const previewNext = preview ? new Set(preview.next) : null;
+
+  // Draw edges
   for (const id in m.nodes) {
     const n = m.nodes[id];
     const a = getXY(n);
+
     for (const nid of n.next) {
       const b = getXY(m.nodes[nid]);
+
       const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
       line.setAttribute("x1", a.x);
       line.setAttribute("y1", a.y);
       line.setAttribute("x2", b.x);
       line.setAttribute("y2", b.y);
 
+      // Styling:
+      // - thicker from preview node
+      // - slightly brighter from current node
       const isFromCurrent = (id === m.currentId);
-      const isPreviewPath = (m.previewId && id === m.previewId);
-      line.setAttribute("class", isPreviewPath ? "mapLine preview" : (isFromCurrent ? "mapLine hot" : "mapLine"));
+      const isFromPreview = (m.previewId && id === m.previewId);
+
+      line.setAttribute("stroke", isFromPreview ? "rgba(255,255,255,0.60)"
+                        : isFromCurrent ? "rgba(255,255,255,0.35)"
+                        : "rgba(255,255,255,0.18)");
+      line.setAttribute("stroke-width", isFromPreview ? "4" : (isFromCurrent ? "3.5" : "3"));
 
       svg.appendChild(line);
     }
   }
 
-  mapBox.appendChild(svg);
-
-  // Nodes
+  // Node layer (absolute)
   const nodeLayer = document.createElement("div");
-  nodeLayer.className = "mapNodes";
+  nodeLayer.style.position = "absolute";
+  nodeLayer.style.left = "0";
+  nodeLayer.style.top = "0";
   nodeLayer.style.width = `${width}px`;
   nodeLayer.style.height = `${height}px`;
-
-  const preview = m.previewId ? m.nodes[m.previewId] : null;
-  const previewNext = preview ? new Set(preview.next) : null;
 
   for (const id in m.nodes) {
     const n = m.nodes[id];
     const { x, y } = getXY(n);
     const rt = RoomTypes[n.type];
 
-    const btn = document.createElement("button");
-    btn.className = "mapNode";
-    btn.style.left = `${x - 18}px`;
-    btn.style.top = `${y - 18}px`;
-    btn.title = `${rt.name}`;
-
     const isSelectable = m.selectable.includes(id);
     const isCurrent = (id === m.currentId);
     const isVisited = n.visited;
     const isNextFromPreview = previewNext ? previewNext.has(id) : false;
 
-    btn.classList.toggle("selectable", isSelectable);
-    btn.classList.toggle("current", isCurrent);
-    btn.classList.toggle("visited", isVisited);
-    btn.classList.toggle("nextPreview", isNextFromPreview);
+    const btn = document.createElement("button");
+    btn.className = "mapNode";
+    btn.style.position = "absolute";
+    btn.style.left = `${x - 18}px`;
+    btn.style.top = `${y - 18}px`;
+    btn.style.width = "36px";
+    btn.style.height = "36px";
+    btn.style.borderRadius = "999px";
+    btn.style.cursor = "pointer";
+    btn.style.fontWeight = "900";
+    btn.style.border = "1px solid rgba(255,255,255,0.18)";
+    btn.style.background = "rgba(15,18,30,0.88)";
+    btn.style.color = "rgba(255,255,255,0.90)";
+    btn.style.transition = "transform 0.08s ease";
 
-    btn.textContent = rt.badge[0].slice(0, 1);
+    // Visual states (no CSS required)
+    if (isSelectable) btn.style.border = "1px solid rgba(255,255,255,0.55)";
+    if (isCurrent) btn.style.outline = "2px solid rgba(255,255,255,0.65)";
+    if (isVisited) btn.style.opacity = "0.65";
+    if (isNextFromPreview) btn.style.boxShadow = "0 0 0 3px rgba(255,255,255,0.25)";
+
+    btn.title = `${rt.name}`;
+    btn.textContent = iconFor(n.type);
+
+    btn.onmouseenter = () => (btn.style.transform = "scale(1.08)");
+    btn.onmouseleave = () => (btn.style.transform = "scale(1.00)");
 
     btn.onclick = () => {
-      // always allow preview (planning ahead)
+      // If it's selectable:
+      // - first click previews
+      // - second click enters
+      if (isSelectable) {
+        if (m.previewId === id) {
+          enterNode(id);
+          return;
+        }
+        m.previewId = id;
+        renderAll(renderScreen);
+        return;
+      }
+
+      // Not selectable: preview only (planning ahead)
       m.previewId = id;
       renderAll(renderScreen);
     };
@@ -381,8 +449,10 @@ function screenMap() {
     nodeLayer.appendChild(btn);
   }
 
-  mapBox.appendChild(nodeLayer);
-  wrap.appendChild(mapBox);
+  stage.appendChild(svg);
+  stage.appendChild(nodeLayer);
+  mapWrap.appendChild(stage);
+  wrap.appendChild(mapWrap);
 
   // Preview panel
   const panel = document.createElement("div");
@@ -394,10 +464,14 @@ function screenMap() {
   } else {
     const rt = RoomTypes[p.type];
     const canEnter = m.selectable.includes(p.id);
-    const nextNames = (p.next || []).map(nid => RoomTypes[m.nodes[nid].type].name);
+
+    const nextNames = (p.next || []).map(nid => {
+      const t = m.nodes[nid].type;
+      return `${iconFor(t)} ${RoomTypes[t].name}`;
+    });
 
     panel.innerHTML = `
-      <h3>Preview: ${rt.name}</h3>
+      <h3>Preview: ${iconFor(p.type)} ${rt.name}</h3>
       <p>${rt.desc}</p>
       <div class="roomMeta">
         <span class="badge ${rt.badge[1]}">${rt.badge[0]}</span>
