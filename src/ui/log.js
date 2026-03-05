@@ -9,5 +9,5 @@ export function log(msg, cls = "info") {
 }
 
 export function logClear() {
-  $("log").innerHTML = "";
+  document.getElementById("log").innerHTML = "";
 }
