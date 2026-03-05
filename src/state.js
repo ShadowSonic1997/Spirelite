@@ -20,7 +20,6 @@ export function newRunState() {
       relics: [],
       selfWeakNext: 0,
       status: { weak: 0, vuln: 0 },
-
       powers: {},
 
       deck: [],
@@ -29,6 +28,9 @@ export function newRunState() {
       discard: [],
       exhaust: [],
     },
+
+    // NEW: map state
+    map: null, // set by buildNewMap()
 
     combat: null,
     lastCombatKind: "battle",
